@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title><%= title %></title>
+    <link rel="stylesheet" type="text/css" href="../css/upload.css">
+</head>
+<body>
+
+     <!-- 
+       <% if (locals.success) { %> 
+          <div id="alt_sucess" class="alert alert-success"> 
+            <%- success %> 
+          </div> 
+       <% } %> 
+
+      <% if (locals.error) { %> 
+        <div id="alt_warning" class="alert alert-warning"> 
+          <%= error %> 
+        </div> 
+      <% } %>  
+  -->
+<img src="" id="img">    
+
+<div class="updateFile">   
+    <form id="form" class="form" action="/" method="post" enctype='multipart/form-data'>
+        <input type="file" id="file" class="file" name="files" multiple="">
+        <span class="btn">请选择要上传的文件(小于2MB)</span>
+        <input type="submit" id="submit" class="btn submit" value="上传">
+    </form>
+    <ul id="uploadList" class="uploadList">
+        <li class="title">
+            <span class="a1">标题</span>
+            <span class="a2">类型</span>
+            <span class="a3">大小</span>
+            <span class="a4">进度</span>
+            <span class="a5">状态</span>
+        </li>
+    </ul> 
+</div> 
+<script id="fileTemplate" type="text/template">
+<li id="files_$id$">
+  <span class="a1" id="name_$id$">$name$</span>
+  <span class="a2">$type$</span>
+  <span class="a3">$size$</span>
+  <span class="a4" id="progress_$id$">$progress$</span>
+  <span class="a5" id="status_$id$">$status$</span>
+</li>
+</script>
+
+<script type="text/javascript" src="../js/jquery.min.js" ></script>
+<script type="text/javascript">
+
+$(function() {
+    var iForm = $("#form"),
+        iFile = $('#file'),
+        uploadList = $('#uploadList'),
+        htmlTemplate = $("#fileTemplate").html() || '',
+        fileArray = [],
+        todo = true;
+    iFile.on('change', function(event) {
+        if (!todo) return;
+        if (!!(window.XMLHttpRequestUpload && window.FileReader)) {
+            var files = event.target.files;
+            // console.log(files)
+            var htmlFile = '',
+                index = 0,
+                length = files.length;
+            var types = {　　　　　　
+                'image/png': true,
+    　　　　　　'image/jpeg': true,
+    　　　　　　'image/gif': true　　　　
+            };
+
+            for (; index < length; index++) {
+                (function(i) {
+                    var file = files[i];
+                    var objHtml = {
+                        id: file.lastModified + '' + file.size + file.type.replace(/\W/g, ''),
+                        name: file.name,
+                        type: file.type || '',
+                        size: file.size,
+                        status: '等待上传',
+                        progress: '0%'
+                    };
+                    var o = {
+                        id: objHtml.id,
+                        name: objHtml.name,
+                        file: file,
+                        upload: false,
+                        token: true
+                    };
+                    // name 50字符限制
+                    if (objHtml.name.length > 50) {
+                        objHtml.name = objHtml.name.slice(0, 20) + '...' + objHtml.name.slice(-20);
+                    }
+                    // 如果大小大于1M使用'M'为单位表示, 1位小数点
+                    if (objHtml.size > 1024 * 1024) {
+                        objHtml.size = Math.round(objHtml.size / (1024 * 1024) * 10) / 10 + "MB";
+                    } else if (objHtml.size > 1024) {
+                        // 如果大小大于1KB使用'KB'为单位表示, 1位小数点
+                        objHtml.size = Math.round(objHtml.size / 1024 * 10) / 10 + "KB";
+                    }
+
+                    if (objHtml.size > 1024 * 1024 * 2) {
+                        // 如果文件大于2000K, 状态为'大小溢出'
+                        objHtml.status = '文件过大';
+                        o.token = false;
+                    }
+
+                    if (types[objHtml.type] !== true) {
+                        objHtml.status = '文件不是图片';
+                        o.token = false;
+                    }
+
+                    // if (types[objHtml.type] === true) {　
+                    //     var reader = new FileReader();　　　　　　
+                    //     reader.onloadend = function(e) {
+                    //         objHtml.name = '<img src="'+ e.target.result +'" width="100" />'
+                    //     };　　　　
+                    //     reader.readAsDataURL(file);
+                    // }
+
+                    htmlFile += htmlTemplate.replace(/\$\w+\$/gi, function(matchs) {
+                        var v = objHtml[matchs.replace(/\$/g, '')];
+                        return (v + '') === 'undefined' ? '' : v;
+                    });
+                    fileArray.push(o);
+                }(index));
+            }
+
+            uploadList.append(htmlFile);
+            
+        }
+    });
+
+    iForm.on('submit', function(e) {
+        if (!todo) return;
+        todo = false;
+        if (!!window.FormData) {　
+            e.preventDefault();
+            if (fileArray.length < 1) {
+                todo = true;
+                alert('没有要上传的图片');
+                return;
+            }
+            var url = $(this).attr('action') + '?q=blob';
+
+            function uploadFile() {
+                if (fileArray.length < 1) {
+                    todo = true;
+                    alert('没有要上传的图片');
+                    return;
+                }
+                var f = fileArray.shift();
+                if (!f.token || f.upload) {
+                    return uploadFile();
+                }
+                var fd = new FormData();
+                fd.append('file', f.file);
+                 
+                // fd.append("files", file.slice(start, start + fileSplitSize));
+                // fd.append("start", start + "");
+
+                $.ajax({
+                    xhr: function() {
+                        var xhr = new window.XMLHttpRequest();
+                        xhr.upload.addEventListener("progress", function(e) {
+                            if (e.lengthComputable) {
+                                var progress = e.loaded / e.total * 100 | 0;
+                                $('#progress_' + f.id).html(progress + '%');
+                            }
+                        }, false);
+                        return xhr;
+                    },
+                    url: url,
+                    type: 'POST',
+                    dataType: 'json',
+                    data: fd,
+                    processData: false,
+                    contentType: false,
+                    success: function(data) {
+                        todo = true;
+                        if (data.code) {
+                            f.upload = true;
+                            $('#status_' + f.id).html('上传成功');
+                            $('#files_' + f.id).fadeOut('slow', function() {
+                                $('#files_' + f.id).remove();
+                            });
+                        } else {
+                            $('#status_' + f.id).html('上传失败');
+                        }
+                        if (fileArray.length > 0) {
+                            uploadFile();
+                        } else {
+                            iForm[0].reset()
+                            iForm[0].blur();
+                            console.log('上传完成');
+                        }
+                    }
+                });
+            }
+            uploadFile();
+
+        } else {
+            　　　　
+            if (iFile.val() == '') {
+                e.preventDefault();
+                todo = true;
+                alert('没有要上传的图片');
+                return;
+            }　　
+            var id = "iframe_" + (+new Date());　　
+            var iframe = $('<iframe id="' + id + '" name="' + id + '" style="display:none;">');　　
+            var url = iForm.attr('action');　　
+            iForm.attr('target', id).append(iframe).attr('action', url + '?q=iframe&iframe=check');
+            window.check = function(data) {
+                if (data.code) {
+                    alert('上传成功')
+                    $('#img').attr('src', data.url);
+                } else {
+                    alert('上传失败')
+                }
+                todo = true;
+                iframe.remove();
+                iForm.removeAttr('target');
+                iForm.attr('action', url);
+                iForm[0].reset();
+                iForm[0].blur();
+                window.check = null;
+            };
+
+        }　　
+    });
+});
+</script>
+
+</body>
+</html>
